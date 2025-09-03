@@ -7,77 +7,53 @@ on:
   pull_request:
 
 jobs:
-  setup:
+  build-android:
     runs-on: ubuntu-latest
     container:
+      # This is the direct equivalent of the global 'image:' in your GitLab file.
       image: reactnativecommunity/react-native-android:v17.0
+
     steps:
-      - uses: actions/checkout@v4
+      # Step 1: Get the code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Verify tools
-        run: |
-          java -version
-          javac -version
-          node --version
-          echo "Android home is $ANDROID_HOME"
-          ls $ANDROID_HOME
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list
+      # Step 2: Set up Node.js environment (Best Practice)
+      # This ensures npm and npx are correctly added to the PATH.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Or your project's specific Node.js version
 
-  install_node_modules:
-    runs-on: ubuntu-latest
-    container:
-      image: reactnativecommunity/react-native-android:v17.0
-    needs: setup
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
-
+      # Step 3: Cache dependencies for speed
+      # This is a major improvement over passing artifacts.
       - name: Cache node_modules
         uses: actions/cache@v4
+        id: node-cache
         with:
           path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Upload node_modules as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: node_modules
-          path: node_modules
+      # Step 4: Install dependencies (maps to your 'install-packages' stage)
+      - name: Install Dependencies
+        # This step only runs if the cache wasn't a perfect match
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        # 'npm ci' is faster and safer for CI than 'rm package-lock && npm install'
+        run: npm ci
 
-  build_android:
-    runs-on: ubuntu-latest
-    container:
-      image: reactnativecommunity/react-native-android:v17.0
-    needs: install_node_modules
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download node_modules
-        uses: actions/download-artifact@v4
-        with:
-          name: node_modules
-          path: node_modules
-      
-      - name: Verify npx
-        run: npx --version
-
+      # Step 5: Build the Android app (maps to your 'build' stage)
       - name: Build Android Release
         run: |
-          export PATH=$PATH:$(npm bin)
           cd android
-          chmod +x gradlew
+          chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
 
-
-      - name: Upload APK artifact
+      # Step 6: Upload the final APK (maps to the artifacts in your 'build' stage)
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-release.apk
           path: android/app/build/outputs/apk/release/app-release.apk
