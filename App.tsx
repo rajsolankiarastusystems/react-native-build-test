@@ -39,7 +39,7 @@ function Section({children, title}: SectionProps): React.JSX.Element {
             color: isDarkMode ? Colors.white : Colors.black,
           },
         ]}>
-        {title}
+        {title} 
       </Text>
       <Text
         style={[
@@ -54,6 +54,7 @@ function Section({children, title}: SectionProps): React.JSX.Element {
   );
 }
 
+//test comment
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
 
