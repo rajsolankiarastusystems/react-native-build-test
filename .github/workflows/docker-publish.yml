@@ -1,0 +1,78 @@
+name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    container:
+      image: reactnativecommunity/react-native-android:v17.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tools
+        run: |
+          java -version
+          javac -version
+          node --version
+          echo "Android home is $ANDROID_HOME"
+          ls $ANDROID_HOME
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list
+
+  install_node_modules:
+    runs-on: ubuntu-latest
+    container:
+      image: reactnativecommunity/react-native-android:v17.0
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          rm -f package-lock.json
+          npm install
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Upload node_modules as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+  build_android:
+    runs-on: ubuntu-latest
+    container:
+      image: reactnativecommunity/react-native-android:v17.0
+    needs: install_node_modules
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download node_modules
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew clean
+          ./gradlew assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
